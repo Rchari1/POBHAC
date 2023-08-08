@@ -11,7 +11,7 @@ const double sigma_T = 6.652e-29; // Thomson scattering cross-section
 const double sigma = 1e-26;   // Cross-section for the spallation reaction near a black hole
 const double f_p = 1e16;      // Proton flux
 const double R = 1e12;        // Radius of the accretion disk
-const double Omega = 1e-7;    // Angular velocity of the accretion disk (placeholder value)
+const double Omega = 1e-7;    // Angular velocity of the accretion disk
 double n_O = 1e14;            // Initial number density of oxygen
 double n_Be = 1e13;           // Initial number density of beryllium
 const double M_J = 1.898e27;  // Mass of Jupiter
@@ -22,6 +22,12 @@ const double m_u = 9.012;  // Atomic mass unit
 const double k = 1.380649e23; // Boltzman constant
 double Mdot = 0.0;
 double f_pl = 0.01; 
+double M1 = 1.989e+38; // Mass of the Black Hole
+double M2 = 5.972e24; // Mass of planet
+double M3 = 7.342e22; // Mass of exomoon 
+
+// Define threshold for "consumed" status
+const double CONSUMED_THRESHOLD = 0.05;  // 5% of original mass
 
 // Timestepping
 const double dt_max = 1.0;
@@ -49,13 +55,14 @@ bool isTidallyDisrupted(const Body& b, const Body& blackHole) {
     double tidalRadius = (b.radius) * std::pow((blackHole.mass / b.mass), 1.0/3.0);
     return r < tidalRadius;
 }
-
+/*
 double calculate_L_dot(const Body& blackHole, const Body& disruptedBody) {
     double dx = disruptedBody.x - blackHole.x;
     double dy = disruptedBody.y - blackHole.y;
     double relative_velocity = std::sqrt(std::pow(disruptedBody.vx - blackHole.vx, 2) + std::pow(disruptedBody.vy - blackHole.vy, 2));
     return blackHole.mass * disruptedBody.mass * relative_velocity / (dx*dx + dy*dy);
 }
+
 
 void accretionFromAngularMomentum(Body& blackHole, const Body& disruptedBody) {
     double L_dot = calculate_L_dot(blackHole, disruptedBody);
@@ -64,11 +71,20 @@ void accretionFromAngularMomentum(Body& blackHole, const Body& disruptedBody) {
     blackHole.mass += std::min(accretedMass, disruptedBody.mass);
 }
 
+*/
+
+
+void accretionFromAngularMomentum(Body& blackHole, const Body& disruptedBody) {
+    double L_dot = ((4 * M_PI * G * M1 * c)/ sigma_T);
+    Mdot = L_dot / (epsilon * c * c); 
+    double accretedMass = Mdot * 1.0;
+    blackHole.mass += std::min(accretedMass, disruptedBody.mass);
+}
 
 double calculate_mixing_ratio(double f_pl, double Mdot,  Body& blackHole) {
     double blackHole_mass_J = blackHole.mass / M_J; // Black hole mass in Jupiter masses
     double P = 1e-6 * 1e5; // Pressure in Pascals (1 microbar)
-    double n_b = P / (k * T); // Background number density in m^-3 (const::k should be the Boltzmann constant)
+    double n_b = P / (k * T); // Background number density in m^-3 (k is the Boltzmann constant)
     
     // Directly using Mdot from the function arguments
     double F = -6.5e9 * f_pl * (epsilon * Mdot / 1e8) * std::pow(R / 1737e3, -2); // Particle flux
@@ -82,9 +98,9 @@ double calculate_mixing_ratio(double f_pl, double Mdot,  Body& blackHole) {
 
 
 int main() {
-    Body blackHole = {1.989e+38, 1e12, 0, 0, 0, 0};
-    Body planet = {5.972e24, 6371e6, 1e9, 0, 0, 2e4};
-    Body exomoon = {7.342e22, 1737e3, 1e9 + 1e8, 0, 0, 2e4 + 1e3};
+    Body blackHole = {M1, 1e12, 0, 0, 0, 0};
+    Body planet = {M2, 6371e6, 1e9, 0, 0, 2e4};
+    Body exomoon = {M3, 1737e3, 1e9 + 1e8, 0, 0, 2e4 + 1e3};
 
     double dt = 1.0;
 
@@ -130,6 +146,17 @@ int main() {
         // Mixing ratio
 
         double mixing_ratio = calculate_mixing_ratio(f_pl, Mdot, blackHole);
+
+        // Check if the planet or exomoon is consumed
+        if (planet.mass < M2 * CONSUMED_THRESHOLD) {
+            std::cout << "Planet effectively consumed by the black hole at step " << step << "." << std::endl;
+            break;  // Exit the simulation loop
+        }
+
+        if (exomoon.mass < M3 * CONSUMED_THRESHOLD) {
+            std::cout << "Exomoon effectively consumed by the black hole at step " << step << "." << std::endl;
+            break;  // Exit the simulation loop
+        }
 
 
          // Output
