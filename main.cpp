@@ -21,6 +21,7 @@ const double m_b = 16;     // Mass of beryllium
 const double m_u = 9.012;  // Atomic mass unit
 const double k = 1.380649e23; // Boltzman constant
 double Mdot = 0.0;
+double totalMassLost = 0.0;
 double f_pl = 0.01; 
 double M1 = 1.989e+38; // Mass of the Black Hole
 double M2 = 5.972e24; // Mass of planet
@@ -74,12 +75,16 @@ void accretionFromAngularMomentum(Body& blackHole, const Body& disruptedBody) {
 */
 
 
-void accretionFromAngularMomentum(Body& blackHole, const Body& disruptedBody) {
+double accretionFromAngularMomentum(Body& blackHole, const Body& disruptedBody) {
     double L_dot = ((4 * M_PI * G * M1 * c)/ sigma_T);
     Mdot = L_dot / (epsilon * c * c); 
     double accretedMass = Mdot * 1.0;
-    blackHole.mass += std::min(accretedMass, disruptedBody.mass);
+    double actualAccretedMass = std::min(accretedMass, disruptedBody.mass);
+    blackHole.mass += actualAccretedMass;
+    return actualAccretedMass;
 }
+
+
 
 double calculate_mixing_ratio(double f_pl, double Mdot,  Body& blackHole) {
     double blackHole_mass_J = blackHole.mass / M_J; // Black hole mass in Jupiter masses
@@ -115,19 +120,23 @@ int main() {
         dt = dt_max;
     }
 
-        if (isTidallyDisrupted(planet, blackHole)) {
-            accretionFromAngularMomentum(blackHole, planet);
-            planet.mass = planet.mass - (blackHole.mass - planet.mass);
-        }
+    if (isTidallyDisrupted(planet, blackHole)) {
+        double accretedFromPlanet = accretionFromAngularMomentum(blackHole, planet);
+        planet.mass -= accretedFromPlanet;
+        totalMassLost += accretedFromPlanet;
+    }
 
-        if (isTidallyDisrupted(exomoon, blackHole)) {
-            accretionFromAngularMomentum(blackHole, exomoon);
-            exomoon.mass = exomoon.mass - (blackHole.mass - exomoon.mass);
+    if (isTidallyDisrupted(exomoon, blackHole)) {
+        double accretedFromExomoon = accretionFromAngularMomentum(blackHole, exomoon);
+        exomoon.mass -= accretedFromExomoon;
+        totalMassLost += accretedFromExomoon;
+        double delta_n_Be = sigma * f_p * n_O * dt;
+        n_Be += delta_n_Be;
+        n_O -= delta_n_Be;
+    }
 
-            double delta_n_Be = sigma * f_p * n_O * dt;
-            n_Be += delta_n_Be;
-            n_O -= delta_n_Be;
-        }
+
+
 
         double fpx, fpy, fmx, fmy;
         computeForce(planet, blackHole, fpx, fpy);
@@ -170,7 +179,8 @@ int main() {
                     << " Exomoon: (" << exomoon.x << ", " << exomoon.y << ")"
                     << " Beryllium to Oxygen ratio: " << n_Be / n_O 
                     << " Distance (Exomoon to Black Hole): " << distanceToBlackHole 
-                    << " Mixing Ratio: " << mixing_ratio 
+                    << " Mixing Ratio: " << mixing_ratio
+                    << "Total Mass Lost: " << totalMassLost 
                     << std::endl;
 }
 
